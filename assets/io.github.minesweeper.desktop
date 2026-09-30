@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Minesweeper
+Comment=Clear the field, trust the numbers, and outsmart the mines.
+Exec=minesweeper
+Icon=io.github.minesweeper
+Terminal=false
+Categories=Game;LogicGame;
+Keywords=mines;minefield;puzzle;
+StartupNotify=true
+StartupWMClass=io.github.minesweeper

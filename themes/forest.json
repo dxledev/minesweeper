@@ -1,0 +1,20 @@
+{
+    "colors": {
+        "accent": "#b6e3c6",
+        "accent_text": "#152c24",
+        "background": "#101819",
+        "border": "#304243",
+        "danger": "#e6bfbc",
+        "grid": "#536967",
+        "matching": "#2b453b",
+        "muted": "#91a6a2",
+        "related": "#203230",
+        "selection": "#355c4b",
+        "success": "#b6e3c6",
+        "surface": "#182324",
+        "surface_alt": "#1e2d2e",
+        "text": "#edf3ed"
+    },
+    "name": "forest",
+    "version": 1
+}
