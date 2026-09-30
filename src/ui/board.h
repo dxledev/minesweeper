@@ -13,7 +13,7 @@ public:
     void setTheme(const Theme &theme);
     void resetSelection();
     void setPaused(bool paused);
-    void setFlagMode(bool enabled) { flagMode_ = enabled; }
+    void setFlagMode(bool enabled);
     QRectF cellRect(int index) const;
 
 signals:
@@ -24,6 +24,8 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void leaveEvent(QEvent *) override;
     void keyPressEvent(QKeyEvent *event) override;
 
@@ -34,8 +36,12 @@ private:
     bool flagMode_ = false;
     int selected_ = 0;
     int hovered_ = -1;
+    QPointF pointerPosition_;
+    bool pointerInside_ = false;
     qreal cellSize() const;
     int cellAt(const QPointF &position) const;
+    bool canClick(int index) const;
+    void updateCursor();
     void act(int index, bool flag, bool chord);
     void paintCell(QPainter &painter, int index);
 };

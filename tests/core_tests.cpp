@@ -1,5 +1,6 @@
 #include "core/game.h"
 #include "core/storage.h"
+#include "core/statistics.h"
 #include "core/theme.h"
 #include "core/theme_source.h"
 
@@ -13,6 +14,58 @@ using namespace minesweeper;
 class CoreTests : public QObject {
     Q_OBJECT
 private slots:
+    void statisticsOutcomesAndPersistence() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("stats.json");
+        Statistics first(path), second(path);
+        first.reload();
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+            QVERIFY(!first.record(difficulty, State::Ready, 180000, true, 0));
+            QVERIFY(!first.record(difficulty, State::Playing, 180000, false, 0));
+            QVERIFY(!first.record(difficulty, State::Playing, 179999, true, 20));
+            QVERIFY(first.record(difficulty, State::Playing, 180000, true, 20));
+            QVERIFY(first.record(difficulty, State::Won, 90000, true, 71));
+            QVERIFY(second.record(difficulty, State::Won, 45000, true, 71));
+            QVERIFY(first.record(difficulty, State::Lost, 30000, true, 12));
+            QVERIFY(second.record(difficulty, State::Won, 60000, true, 71));
+            first.reload();
+            const auto &stats = first.forDifficulty(difficulty);
+            QCOMPARE(stats.wins, 3);
+            QCOMPARE(stats.losses, 1);
+            QCOMPARE(stats.quits, 1);
+            QCOMPARE(stats.fastestWinMilliseconds, 45000);
+            QCOMPARE(stats.bestWinStreak, 2);
+            QCOMPARE(stats.currentWinStreak, 1);
+            QCOMPARE(stats.clearedCells, 245);
+        }
+        QVERIFY(second.record(Difficulty::Expert, State::Playing, 180001, true, 100));
+        Statistics restored(path);
+        restored.reload();
+        QCOMPARE(restored.forDifficulty(Difficulty::Easy).quits, 1);
+        QCOMPARE(restored.forDifficulty(Difficulty::Expert).quits, 2);
+        QCOMPARE(restored.forDifficulty(Difficulty::Expert).currentWinStreak, 0);
+        QCOMPARE(restored.forDifficulty(Difficulty::Expert).bestWinStreak, 2);
+    }
+
+    void statisticsProtectInvalidFiles() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("stats.json");
+        Statistics statistics(path);
+        QVERIFY(!statistics.record(Difficulty::Easy, State::Playing, 100, true, 1));
+        QVERIFY(!QFileInfo::exists(path));
+        QVERIFY(statistics.record(Difficulty::Easy, State::Won, 1000, true, 71));
+        auto invalid = readJson(path);
+        auto difficulties = invalid.value("difficulties").toObject();
+        auto easy = difficulties.value("easy").toObject();
+        easy.insert("wins", -1);
+        difficulties.insert("easy", easy);
+        invalid.insert("difficulties", difficulties);
+        writeJson(path, invalid);
+        QVERIFY_EXCEPTION_THROWN(statistics.record(Difficulty::Easy, State::Won, 1000, true, 71), std::invalid_argument);
+        QCOMPARE(readJson(path), invalid);
+        QCOMPARE(statistics.forDifficulty(Difficulty::Easy).wins, 1);
+    }
+
     void generation() {
         for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
             const auto size = dimensions(difficulty);

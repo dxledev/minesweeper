@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QFrame>
+#include <QMouseEvent>
 #include <QSignalSpy>
 #include <QStyleOptionButton>
 #include <QTemporaryDir>
@@ -77,6 +78,251 @@ private slots:
             QVERIFY(lastCell.bottom() <= other.board()->height());
             QVERIFY2(lastCell.width() >= 16, qPrintable(QString("Cell width %1 in %2 × %3 window")
                 .arg(lastCell.width()).arg(other.width()).arg(other.height())));
+        }
+    }
+
+    void difficultySelectorWidth() {
+        QTemporaryDir directory;
+        Window window(directory.path(), ensureTheme(directory.filePath("theme.json")));
+        show(window);
+        const auto choices = window.findChildren<QPushButton *>("difficulty");
+        const auto metrics = window.findChildren<QFrame *>("metric");
+        QCOMPARE(choices.size(), 3);
+        QCOMPARE(metrics.size(), 3);
+        for (int width : {580, 720, 1140, 1920}) {
+            window.resize(width, 800);
+            QTest::qWait(30);
+            const int choicesLeft = choices.first()->mapTo(window.centralWidget(), QPoint()).x();
+            const int choicesRight = choices.last()->mapTo(window.centralWidget(), QPoint()).x() + choices.last()->width();
+            const int metricsLeft = metrics.first()->mapTo(window.centralWidget(), QPoint()).x();
+            const int metricsRight = metrics.last()->mapTo(window.centralWidget(), QPoint()).x() + metrics.last()->width();
+            QVERIFY(std::abs((choicesRight - choicesLeft) * 5 - (metricsRight - metricsLeft) * 3) <= 5);
+            QVERIFY(std::abs(choicesLeft + choicesRight - metricsLeft - metricsRight) <= 2);
+            QVERIFY(std::abs(choices.first()->width() - choices.last()->width()) <= 1);
+        }
+    }
+
+    void eligibleCellCursors() {
+        Game game(Difficulty::Intermediate, 5);
+        Board board(game);
+        board.resize(640, 640);
+        board.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&board));
+        auto hover = [&](int index, Qt::CursorShape expected) {
+            const auto position = board.cellRect(index).center();
+            QMouseEvent move(QEvent::MouseMove, position, board.mapToGlobal(position.toPoint()),
+                             Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(&board, &move);
+            QCOMPARE(board.cursor().shape(), expected);
+        };
+        hover(0, Qt::PointingHandCursor);
+        QTest::mouseClick(&board, Qt::RightButton, Qt::NoModifier, board.cellRect(0).center().toPoint());
+        QCOMPARE(board.cursor().shape(), Qt::ArrowCursor);
+        board.setFlagMode(true);
+        QCOMPARE(board.cursor().shape(), Qt::PointingHandCursor);
+        board.setFlagMode(false);
+        QTest::mouseClick(&board, Qt::RightButton, Qt::NoModifier, board.cellRect(0).center().toPoint());
+        QTest::mouseClick(&board, Qt::LeftButton, Qt::NoModifier, board.cellRect(0).center().toPoint());
+        hover(0, Qt::ArrowCursor);
+        int target = -1;
+        for (int index = 0; index < int(game.cells().size()); ++index) {
+            if (!game.cell(index).revealed || !game.cell(index).adjacent) continue;
+            for (int neighbor : game.neighbors(index))
+                if (!game.cell(neighbor).revealed && !game.cell(neighbor).mine) target = index;
+            if (target >= 0) break;
+        }
+        QVERIFY(target >= 0);
+        hover(target, Qt::ArrowCursor);
+        for (int neighbor : game.neighbors(target))
+            if (game.cell(neighbor).mine)
+                QTest::mouseClick(&board, Qt::RightButton, Qt::NoModifier, board.cellRect(neighbor).center().toPoint());
+        hover(target, Qt::PointingHandCursor);
+        board.setPaused(true);
+        QCOMPARE(board.cursor().shape(), Qt::ArrowCursor);
+        board.setPaused(false);
+        QCOMPARE(board.cursor().shape(), Qt::PointingHandCursor);
+        for (int index = 0; index < int(game.cells().size()); ++index)
+            if (game.cell(index).mine && !game.cell(index).flagged) {
+                QTest::mouseClick(&board, Qt::LeftButton, Qt::NoModifier, board.cellRect(index).center().toPoint());
+                break;
+            }
+        QCOMPARE(game.state(), State::Lost);
+        hover(target, Qt::ArrowCursor);
+        QMouseEvent outside(QEvent::MouseMove, QPointF(1, 1), board.mapToGlobal(QPoint(1, 1)),
+                            Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(&board, &outside);
+        QCOMPARE(board.cursor().shape(), Qt::ArrowCursor);
+    }
+
+    void howToPlayModal() {
+        QTemporaryDir directory;
+        Window window(directory.path(), ensureTheme(directory.filePath("theme.json")));
+        window.resize(580, 680);
+        show(window);
+        auto *howToPlay = window.findChild<QPushButton *>("howToPlay");
+        auto *stats = window.findChild<QPushButton *>("stats");
+        QVERIFY(howToPlay);
+        QVERIFY(stats);
+        QVERIFY(howToPlay->geometry().right() < stats->geometry().left());
+        QTest::mouseClick(howToPlay, Qt::LeftButton);
+        auto *modal = window.findChild<QWidget *>("modalBackdrop");
+        auto *card = window.findChild<QFrame *>("howToPlayCard");
+        auto *close = window.findChild<QPushButton *>("closeHowToPlay");
+        QVERIFY(modal->isVisible());
+        QVERIFY(card->isVisible());
+        QVERIFY(modal->rect().contains(card->geometry()));
+        QCOMPARE(window.focusWidget(), close);
+        const auto rules = card->findChildren<QLabel *>("ruleText");
+        QVERIFY(!rules.isEmpty());
+        QVERIFY(rules.last()->text().startsWith("Your first reveal"));
+        QVERIFY(close->y() - (rules.last()->y() + rules.last()->height()) >= 20);
+        for (auto size : {QSize(580, 680), QSize(1920, 1080)}) {
+            window.resize(size);
+            QTest::qWait(30);
+            QVERIFY(modal->rect().contains(card->geometry()));
+            QVERIFY(card->rect().contains(QRect(close->mapTo(card, QPoint()), close->size())));
+            for (auto *text : card->findChildren<QLabel *>("ruleText")) {
+                QVERIFY(card->rect().contains(QRect(text->mapTo(card, QPoint()), text->size())));
+                QVERIFY2(text->height() >= text->heightForWidth(text->width()),
+                         qPrintable(QString("%1: height %2, needed %3, width %4, card %5 × %6")
+                             .arg(text->text()).arg(text->height()).arg(text->heightForWidth(text->width()))
+                             .arg(text->width()).arg(card->width()).arg(card->height())));
+            }
+        }
+        QTest::keyClick(close, Qt::Key_Escape);
+        QVERIFY(!modal->isVisible());
+        QCOMPARE(window.game().state(), State::Ready);
+        QTest::mouseClick(window.board(), Qt::LeftButton, Qt::NoModifier, window.board()->cellRect(0).center().toPoint());
+        QTest::mouseClick(howToPlay, Qt::LeftButton);
+        const auto elapsed = window.elapsedMilliseconds();
+        QTest::qWait(40);
+        QCOMPARE(window.elapsedMilliseconds(), elapsed);
+        QTest::mouseClick(close, Qt::LeftButton);
+        QVERIFY(!modal->isVisible());
+    }
+
+    void modalBackdropClickDismisses() {
+        QTemporaryDir directory;
+        Window window(directory.path(), ensureTheme(directory.filePath("theme.json")));
+        show(window);
+        auto *modal = window.findChild<QWidget *>("modalBackdrop");
+        for (const auto &name : {"howToPlay", "stats"}) {
+            QTest::mouseClick(window.findChild<QPushButton *>(name), Qt::LeftButton);
+            QVERIFY(modal->isVisible());
+            QTest::mouseClick(modal, Qt::LeftButton, Qt::NoModifier, modal->rect().center());
+            QVERIFY(modal->isVisible());
+            QTest::mouseClick(modal, Qt::LeftButton, Qt::NoModifier, QPoint(8, 8));
+            QVERIFY(!modal->isVisible());
+        }
+        QTest::mouseClick(window.board(), Qt::LeftButton, Qt::NoModifier, window.board()->cellRect(0).center().toPoint());
+        QTest::mouseClick(window.findChild<QPushButton *>("primary"), Qt::LeftButton);
+        QVERIFY(modal->isVisible());
+        auto *description = window.findChild<QLabel *>("modalText");
+        QVERIFY(description->height() >= description->heightForWidth(description->width()));
+        const int revealed = window.game().revealedCount();
+        QTest::mouseClick(modal, Qt::LeftButton, Qt::NoModifier, QPoint(8, 8));
+        QVERIFY(!modal->isVisible());
+        QCOMPARE(window.game().revealedCount(), revealed);
+    }
+
+    void statsModalAndTimer() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("theme.json");
+        Window window(directory.path(), ensureTheme(path));
+        window.resize(580, 680);
+        show(window);
+        auto *stats = window.findChild<QPushButton *>("stats");
+        auto *newGame = window.findChild<QPushButton *>("primary");
+        QCOMPARE(stats->height(), newGame->height());
+        QVERIFY(stats->geometry().right() < newGame->geometry().left());
+        QTest::mouseClick(stats, Qt::LeftButton);
+        auto *modal = window.findChild<QWidget *>("modalBackdrop");
+        auto *card = window.findChild<QFrame *>("statsCard");
+        auto *close = window.findChild<QPushButton *>("closeStats");
+        QVERIFY(card->isVisible());
+        QCOMPARE(card->window(), &window);
+        QVERIFY(modal->rect().contains(card->geometry()));
+        QCOMPARE(window.findChild<QLabel *>("stats_0_0")->text(), "0");
+        QTest::keyClick(close, Qt::Key_Tab);
+        QCOMPARE(window.focusWidget(), close);
+        QTest::keyClick(close, Qt::Key_Escape);
+        QVERIFY(!modal->isVisible());
+        QCOMPARE(window.game().state(), State::Ready);
+        QTest::mouseClick(window.board(), Qt::LeftButton, Qt::NoModifier, window.board()->cellRect(0).center().toPoint());
+        QTest::qWait(40);
+        const int revealed = window.game().revealedCount();
+        QTest::mouseClick(stats, Qt::LeftButton);
+        const auto elapsed = window.elapsedMilliseconds();
+        QTest::qWait(60);
+        QCOMPARE(window.elapsedMilliseconds(), elapsed);
+        QVERIFY(edgeEnergy(modal->grab().toImage(), QRect(24, 22, 250, 75)) > 0);
+        writeJson(path, presetTheme("paper").toJson());
+        QTRY_COMPARE(window.palette().color(QPalette::Window), presetTheme("paper").color("background"));
+        for (auto size : {QSize(580, 680), QSize(1920, 1080)}) {
+            window.resize(size);
+            QTest::qWait(40);
+            QVERIFY(modal->rect().contains(card->geometry()));
+            QVERIFY(card->rect().contains(QRect(close->mapTo(card, QPoint()), close->size())));
+            if (size.width() > 1000) QVERIFY(card->width() >= 700);
+            for (auto *text : card->findChildren<QLabel *>()) {
+                if (!text->isVisible()) continue;
+                QVERIFY(card->rect().contains(QRect(text->mapTo(card, QPoint()), text->size())));
+                if (text->wordWrap()) {
+                    QVERIFY2(text->height() >= text->heightForWidth(text->width()), qPrintable(text->text()));
+                } else {
+                    QVERIFY2(text->contentsRect().width() >= text->fontMetrics().horizontalAdvance(text->text()), qPrintable(text->text()));
+                    QVERIFY2(text->contentsRect().height() >= text->fontMetrics().boundingRect(text->text()).height(),
+                        qPrintable(QString("%1: height %2, font %3, hint %4").arg(text->text()).arg(text->contentsRect().height())
+                            .arg(text->fontMetrics().boundingRect(text->text()).height()).arg(text->sizeHint().height())));
+                }
+            }
+            QCOMPARE(stats->height(), newGame->height());
+        }
+        QTest::mouseClick(close, Qt::LeftButton);
+        QTest::qWait(30);
+        QVERIFY(window.elapsedMilliseconds() > elapsed);
+        QCOMPARE(window.game().revealedCount(), revealed);
+        QTest::mouseClick(window.findChild<QPushButton *>("pause"), Qt::LeftButton);
+        QTest::mouseClick(stats, Qt::LeftButton);
+        QTest::keyClick(close, Qt::Key_Escape);
+        QCOMPARE(window.findChild<QPushButton *>("pause")->text(), "Resume");
+        window.close();
+        QVERIFY(!QFileInfo::exists(directory.filePath("stats.json")));
+    }
+
+    void statsRecordGameResultsOnce() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("stats.json");
+        const auto theme = ensureTheme(directory.filePath("theme.json"));
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+            Window window(directory.path(), theme, difficulty);
+            show(window);
+            auto *board = window.board();
+            QTest::mouseClick(board, Qt::LeftButton, Qt::NoModifier, board->cellRect(0).center().toPoint());
+            for (int index = 0; index < int(window.game().cells().size()); ++index)
+                if (!window.game().cell(index).mine && !window.game().cell(index).revealed)
+                    QTest::mouseClick(board, Qt::LeftButton, Qt::NoModifier, board->cellRect(index).center().toPoint());
+            QCOMPARE(window.game().state(), State::Won);
+            QTest::mouseClick(window.findChild<QPushButton *>("stats"), Qt::LeftButton);
+            QCOMPARE(window.findChild<QLabel *>(QString("stats_%1_0").arg(int(difficulty)))->text(), "1");
+            QTest::mouseClick(window.findChild<QPushButton *>("closeStats"), Qt::LeftButton);
+            QTest::mouseClick(window.findChild<QPushButton *>("primary"), Qt::LeftButton);
+            QCOMPARE(window.game().state(), State::Ready);
+            QTest::mouseClick(board, Qt::LeftButton, Qt::NoModifier, board->cellRect(0).center().toPoint());
+            for (int index = 0; index < int(window.game().cells().size()); ++index)
+                if (window.game().cell(index).mine) {
+                    QTest::mouseClick(board, Qt::LeftButton, Qt::NoModifier, board->cellRect(index).center().toPoint());
+                    break;
+                }
+            QCOMPARE(window.game().state(), State::Lost);
+            window.close();
+            Statistics saved(path);
+            saved.reload();
+            const auto &totals = saved.forDifficulty(difficulty);
+            QCOMPARE(totals.wins, 1);
+            QCOMPARE(totals.losses, 1);
+            QCOMPARE(totals.quits, 0);
+            QVERIFY(totals.clearedCells >= int(window.game().cells().size()) - window.game().size().mines);
         }
     }
 
@@ -238,6 +484,7 @@ private slots:
             auto *card = modal->findChild<QFrame *>("modalCard");
             QVERIFY(modal->rect().contains(card->geometry()));
             for (auto *action : modal->findChildren<QPushButton *>()) {
+                if (!action->isVisible()) continue;
                 QStyleOptionButton option;
                 option.initFrom(action);
                 option.rect = action->rect();
@@ -337,6 +584,20 @@ private slots:
         show(window);
         QTest::mouseClick(window.board(), Qt::LeftButton, Qt::NoModifier, window.board()->cellRect(0).center().toPoint());
         QVERIFY(window.grab().save(output + "/easy.png"));
+        QTest::mouseClick(window.findChild<QPushButton *>("stats"), Qt::LeftButton);
+        QVERIFY(window.grab().save(output + "/stats.png"));
+        window.resize(580, 680);
+        QTest::qWait(40);
+        QVERIFY(window.grab().save(output + "/stats-compact.png"));
+        QTest::mouseClick(window.findChild<QPushButton *>("closeStats"), Qt::LeftButton);
+        QTest::mouseClick(window.findChild<QPushButton *>("howToPlay"), Qt::LeftButton);
+        QVERIFY(window.grab().save(output + "/how-to-play-compact.png"));
+        window.resize(1920, 1080);
+        QTest::qWait(40);
+        QVERIFY(window.grab().save(output + "/how-to-play-large.png"));
+        QTest::mouseClick(window.findChild<QPushButton *>("closeHowToPlay"), Qt::LeftButton);
+        window.resize(720, 800);
+        QTest::qWait(40);
         QTest::mouseClick(window.findChild<QPushButton *>("primary"), Qt::LeftButton);
         QVERIFY(window.grab().save(output + "/modal.png"));
         Window expert(directory.path(), loadTheme(path), Difficulty::Expert);

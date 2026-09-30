@@ -1,11 +1,15 @@
 #include "window.h"
+#include "how_to_play_card.h"
 #include "modal_backdrop.h"
+#include "statistics_card.h"
 
 #include <QApplication>
 #include <QEvent>
+#include <QCloseEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QShortcut>
@@ -43,7 +47,8 @@ QWidget *makeMetric(const QString &caption, QLabel *&value) {
 }
 
 Window::Window(QString configDirectory, Theme theme, Difficulty difficulty)
-    : game_(difficulty), themeWatcher_(new ThemeWatcher(configDirectory + "/theme.json", std::move(theme), this)) {
+    : game_(difficulty), statistics_(configDirectory + "/stats.json"),
+      themeWatcher_(new ThemeWatcher(configDirectory + "/theme.json", std::move(theme), this)) {
     setObjectName("minesweeperWindow");
     setWindowTitle("Minesweeper");
     setMinimumSize(580, 680);
@@ -67,6 +72,10 @@ Window::Window(QString configDirectory, Theme theme, Difficulty difficulty)
     snapshotRefresh_.setSingleShot(true);
     snapshotRefresh_.setInterval(0);
     connect(&snapshotRefresh_, &QTimer::timeout, this, &Window::captureModalBackground);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
+        stopClock();
+        recordOutcome();
+    });
     board_->setFocus();
 }
 
@@ -96,6 +105,12 @@ QHBoxLayout *Window::buildHeader() {
     titles->addWidget(subtitle_);
     header->addLayout(titles);
     header->addStretch();
+    auto *howToPlay = button("How to play", "howToPlay");
+    connect(howToPlay, &QPushButton::clicked, this, &Window::showHowToPlay);
+    header->addWidget(howToPlay);
+    auto *stats = button("Stats", "stats");
+    connect(stats, &QPushButton::clicked, this, &Window::showStatistics);
+    header->addWidget(stats);
     auto *newGame = button("New game", "primary");
     connect(newGame, &QPushButton::clicked, this, [this] { requestGame(game_.difficulty()); });
     header->addWidget(newGame);
@@ -115,7 +130,12 @@ QHBoxLayout *Window::buildDifficultySelector() {
         row->addWidget(choice);
     }
     connect(difficulties_, &QButtonGroup::idClicked, this, [this](int id) { requestGame(Difficulty(id)); });
-    return row;
+    auto *centered = new QHBoxLayout;
+    centered->setSpacing(0);
+    centered->addStretch(2);
+    centered->addLayout(row, 6);
+    centered->addStretch(2);
+    return centered;
 }
 
 QHBoxLayout *Window::buildMetrics() {
@@ -160,15 +180,21 @@ QVBoxLayout *Window::buildFooter() {
     themeError_->setWordWrap(true);
     layout->addWidget(themeError_);
     themeError_->hide();
+    statisticsError_ = label("", "statsError");
+    statisticsError_->setWordWrap(true);
+    layout->addWidget(statisticsError_);
+    statisticsError_->hide();
     return layout;
 }
 
 void Window::buildModal() {
     modal_ = new ModalBackdrop(centralWidget());
+    modal_->installEventFilter(this);
     auto *layout = new QVBoxLayout(modal_);
     layout->setContentsMargins(32, 32, 32, 32);
     layout->addStretch();
     auto *card = new QFrame;
+    newGameCard_ = card;
     card->setObjectName("modalCard");
     card->setMaximumWidth(460);
     card->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -198,6 +224,16 @@ void Window::buildModal() {
     actions->addWidget(confirmNew_);
     content->addLayout(actions);
     layout->addWidget(card, 0, Qt::AlignHCenter);
+    statisticsCard_ = new StatisticsCard;
+    statisticsCard_->closeButton()->installEventFilter(this);
+    connect(statisticsCard_->closeButton(), &QPushButton::clicked, this, &Window::dismissModal);
+    layout->addWidget(statisticsCard_, 0, Qt::AlignHCenter);
+    statisticsCard_->hide();
+    howToPlayCard_ = new HowToPlayCard;
+    howToPlayCard_->closeButton()->installEventFilter(this);
+    connect(howToPlayCard_->closeButton(), &QPushButton::clicked, this, &Window::dismissModal);
+    layout->addWidget(howToPlayCard_, 0, Qt::AlignHCenter);
+    howToPlayCard_->hide();
     layout->addStretch();
     modal_->hide();
 }
@@ -236,7 +272,7 @@ void Window::applyTheme() {
         QLabel#eyebrow { font-size: 10px; font-weight: 600; }
         QLabel#metricValue { font-size: 25px; font-weight: 600; }
         QLabel#hint { font-size: 11px; }
-        QLabel#themeError { color: $danger; font-size: 11px; }
+        QLabel#themeError, QLabel#statsError { color: $danger; font-size: 11px; }
         QFrame#metric, QFrame#boardCard { background: $surface; border: 1px solid $border; border-radius: 14px; }
         QPushButton { background: $surface_alt; border: 1px solid $border; border-radius: 9px; padding: 10px 16px; font-weight: 600; }
         QPushButton:hover { background: $selection; }
@@ -245,10 +281,18 @@ void Window::applyTheme() {
         QPushButton#primary { background: $accent; color: $accent_text; border-color: $accent; }
         QPushButton#primary:hover { border-color: $text; }
         QPushButton:disabled { color: $muted; }
-        QFrame#modalCard { background: $surface; border: 1px solid $border; border-radius: 16px; }
-        QFrame#modalCard QPushButton { min-height: 22px; padding: 10px 16px; }
+        QFrame#modalCard, QFrame#statsCard, QFrame#howToPlayCard { background: $surface; border: 1px solid $border; border-radius: 16px; }
+        QFrame#modalCard QPushButton, QFrame#statsCard QPushButton, QFrame#howToPlayCard QPushButton { min-height: 22px; padding: 10px 16px; }
+        QFrame#howToPlayCard QLabel#ruleText { color: $text; font-size: 16px; }
+        QFrame#howToPlayCard QLabel#modalTitle { font-size: 26px; }
+        QFrame#statsCard QLabel, QFrame#statsCard QPushButton { font-size: 16px; }
+        QFrame#statsCard QLabel { min-height: 26px; }
+        QLabel#statsHeading { color: $accent; font-weight: 600; }
+        QLabel#statsCaption { color: $muted; }
         QLabel#modalTitle { font-size: 23px; font-weight: 600; }
         QLabel#modalText { color: $muted; font-size: 14px; }
+        QFrame#statsCard QLabel#modalTitle { font-size: 26px; min-height: 38px; }
+        QFrame#statsCard QLabel#modalText { font-size: 15px; }
     )";
     auto keys = colorKeys();
     std::sort(keys.begin(), keys.end(), [](const QString &left, const QString &right) {
@@ -293,11 +337,15 @@ void Window::refresh() {
 }
 
 void Window::moved() {
+    madeMove_ = true;
     if (game_.state() == State::Playing && !clock_.isValid() && !paused_) {
         clock_.start();
         ticker_.start(1000);
     }
-    if (game_.finished()) stopClock();
+    if (game_.finished()) {
+        stopClock();
+        recordOutcome();
+    }
     refresh();
 }
 
@@ -314,15 +362,58 @@ void Window::requestGame(Difficulty difficulty) {
     if (modal_->isVisible()) return;
     if (game_.state() != State::Playing) { startGame(difficulty); return; }
     pendingDifficulty_ = difficulty;
+    difficulties_->button(int(game_.difficulty()))->setChecked(true);
+    modalText_->setText("Starting a new game will replace your current minefield. You will lose your progress.");
+    showModal(newGameCard_, keepPlaying_);
+}
+
+void Window::showStatistics() {
+    if (modal_->isVisible()) return;
+    if (game_.finished()) recordOutcome();
+    try {
+        statistics_.reload();
+        if (statisticsMessage_.startsWith("Stats not loaded:")) statisticsMessage_.clear();
+    } catch (const std::exception &error) {
+        statisticsMessage_ = "Stats not loaded: " + QString::fromUtf8(error.what());
+    }
+    statisticsCard_->refresh(statistics_, statisticsMessage_);
+    showModal(statisticsCard_, statisticsCard_->closeButton());
+}
+
+void Window::showHowToPlay() {
+    if (modal_->isVisible()) return;
+    showModal(howToPlayCard_, howToPlayCard_->closeButton());
+}
+
+void Window::showModal(QWidget *card, QPushButton *focus) {
     modalPaused_ = paused_;
     setPaused(true);
-    difficulties_->button(int(game_.difficulty()))->setChecked(true);
-    modalText_->setText("This will replace your current minefield. Your theme will stay the same.");
+    newGameCard_->setVisible(card == newGameCard_);
+    statisticsCard_->setVisible(card == statisticsCard_);
+    howToPlayCard_->setVisible(card == howToPlayCard_);
     modal_->setGeometry(centralWidget()->rect());
     modal_->show();
+    if (card == newGameCard_) {
+        modalText_->setMinimumHeight(modalText_->heightForWidth(modalText_->width()));
+        modal_->layout()->activate();
+    }
     captureModalBackground();
     modal_->raise();
-    keepPlaying_->setFocus();
+    focus->setFocus();
+}
+
+void Window::recordOutcome() {
+    if (outcomeRecorded_) return;
+    try {
+        statistics_.record(game_.difficulty(), game_.state(), elapsedMilliseconds(), madeMove_, game_.revealedCount());
+        outcomeRecorded_ = true;
+        statisticsMessage_.clear();
+        statisticsError_->hide();
+    } catch (const std::exception &error) {
+        statisticsMessage_ = "Stats not saved: " + QString::fromUtf8(error.what());
+        statisticsError_->setText(statisticsMessage_);
+        statisticsError_->show();
+    }
 }
 
 void Window::dismissModal() {
@@ -333,7 +424,8 @@ void Window::dismissModal() {
 }
 
 void Window::captureModalBackground() {
-    if (!modal_->isVisible() || game_.state() != State::Playing || !paused_) return;
+    if (!modal_->isVisible()) return;
+    const bool overlayPaused = paused_;
     paused_ = modalPaused_;
     board_->setPaused(paused_);
     refresh();
@@ -346,22 +438,33 @@ void Window::captureModalBackground() {
     content_->render(&painter, QPoint(), QRegion(), QWidget::DrawChildren);
     painter.end();
     modal_->capture(snapshot);
-    paused_ = true;
-    board_->setPaused(true);
+    paused_ = overlayPaused;
+    board_->setPaused(paused_);
     refresh();
 }
 
 void Window::startGame(Difficulty difficulty) {
     stopClock();
+    recordOutcome();
     accumulatedMilliseconds_ = 0;
     paused_ = false;
     automaticPause_ = false;
+    madeMove_ = false;
+    outcomeRecorded_ = false;
     game_ = Game(difficulty);
     board_->resetSelection();
     board_->setPaused(false);
     flagMode_->setChecked(false);
     board_->setFocus();
     refresh();
+}
+
+void Window::closeEvent(QCloseEvent *event) {
+    QMainWindow::closeEvent(event);
+    if (event->isAccepted()) {
+        stopClock();
+        recordOutcome();
+    }
 }
 
 void Window::resizeEvent(QResizeEvent *event) {
@@ -385,10 +488,24 @@ void Window::changeEvent(QEvent *event) {
 }
 
 bool Window::eventFilter(QObject *object, QEvent *event) {
+    if (object == modal_ && event->type() == QEvent::MouseButtonPress) {
+        const auto *mouse = static_cast<QMouseEvent *>(event);
+        const QPoint point = mouse->position().toPoint();
+        for (QWidget *card : {static_cast<QWidget *>(newGameCard_), static_cast<QWidget *>(statisticsCard_), static_cast<QWidget *>(howToPlayCard_)})
+            if (card->isVisible() && card->geometry().contains(point)) return false;
+        dismissModal();
+        return true;
+    }
     if (modal_->isVisible() && event->type() == QEvent::KeyPress) {
         const auto *key = static_cast<QKeyEvent *>(event);
+        if (key->key() == Qt::Key_Escape) {
+            dismissModal();
+            return true;
+        }
         if (key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab) {
-            (object == keepPlaying_ ? confirmNew_ : keepPlaying_)->setFocus();
+            if (statisticsCard_->isVisible()) statisticsCard_->closeButton()->setFocus();
+            else if (howToPlayCard_->isVisible()) howToPlayCard_->closeButton()->setFocus();
+            else (object == keepPlaying_ ? confirmNew_ : keepPlaying_)->setFocus();
             return true;
         }
     }

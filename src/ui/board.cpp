@@ -53,12 +53,38 @@ void Board::setTheme(const Theme &theme) {
 void Board::resetSelection() {
     selected_ = 0;
     hovered_ = -1;
+    updateCursor();
     update();
 }
 
 void Board::setPaused(bool paused) {
     paused_ = paused;
+    updateCursor();
     update();
+}
+
+void Board::setFlagMode(bool enabled) {
+    flagMode_ = enabled;
+    updateCursor();
+}
+
+bool Board::canClick(int index) const {
+    if (paused_ || game_.finished() || index < 0) return false;
+    const auto &cell = game_.cell(index);
+    if (!cell.revealed) return flagMode_ || !cell.flagged;
+    if (!cell.adjacent) return false;
+    const auto neighbors = game_.neighbors(index);
+    const int flags = std::count_if(neighbors.begin(), neighbors.end(), [this](int neighbor) {
+        return game_.cell(neighbor).flagged;
+    });
+    return flags == cell.adjacent && std::any_of(neighbors.begin(), neighbors.end(), [this](int neighbor) {
+        return !game_.cell(neighbor).revealed && !game_.cell(neighbor).flagged;
+    });
+}
+
+void Board::updateCursor() {
+    const int index = pointerInside_ ? cellAt(pointerPosition_) : -1;
+    setCursor(canClick(index) ? Qt::PointingHandCursor : Qt::ArrowCursor);
 }
 
 qreal Board::cellSize() const {
@@ -138,9 +164,12 @@ void Board::act(int index, bool flag, bool chord) {
     const bool changed = chord ? game_.chord(index) : flag ? game_.toggleFlag(index) : game_.reveal(index);
     update();
     if (changed) emit moved();
+    updateCursor();
 }
 
 void Board::mousePressEvent(QMouseEvent *event) {
+    pointerPosition_ = event->position();
+    pointerInside_ = true;
     setFocus(Qt::MouseFocusReason);
     const int index = cellAt(event->position());
     if (event->button() == Qt::MiddleButton) act(index, false, true);
@@ -153,15 +182,32 @@ void Board::mouseDoubleClickEvent(QMouseEvent *event) {
 }
 
 void Board::mouseMoveEvent(QMouseEvent *event) {
+    pointerPosition_ = event->position();
+    pointerInside_ = true;
     const int next = cellAt(event->position());
     if (next != hovered_) {
         hovered_ = next;
         update();
     }
+    setCursor(canClick(next) ? Qt::PointingHandCursor : Qt::ArrowCursor);
+}
+
+void Board::enterEvent(QEnterEvent *event) {
+    QWidget::enterEvent(event);
+    pointerPosition_ = event->position();
+    pointerInside_ = true;
+    updateCursor();
+}
+
+void Board::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    updateCursor();
 }
 
 void Board::leaveEvent(QEvent *) {
     hovered_ = -1;
+    pointerInside_ = false;
+    setCursor(Qt::ArrowCursor);
     update();
 }
 

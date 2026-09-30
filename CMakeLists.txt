@@ -9,6 +9,7 @@ find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Widgets)
 add_library(minesweeper_core
     src/core/game.cpp
     src/core/storage.cpp
+    src/core/statistics.cpp
     src/core/theme.cpp
     src/core/theme_source.cpp
 )
@@ -16,7 +17,9 @@ target_include_directories(minesweeper_core PUBLIC src)
 target_link_libraries(minesweeper_core PUBLIC Qt6::Core Qt6::Gui)
 add_library(minesweeper_ui
     src/ui/board.cpp
+    src/ui/how_to_play_card.cpp
     src/ui/modal_backdrop.cpp
+    src/ui/statistics_card.cpp
     src/ui/theme_watcher.cpp
     src/ui/window.cpp
 )

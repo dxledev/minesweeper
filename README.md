@@ -37,13 +37,17 @@ The window can be tiled, floated, maximized, and resized. Cells scale to the ava
 | Enter | Reveal surrounding cells when adjacent flag count matches |
 | P | Pause / resume |
 | Ctrl + N | New game at the current difficulty |
-| Escape | Dismiss the new-game confirmation |
+| Escape | Dismiss the current modal |
 
 **Flag mode** makes left click and Space place flags. Chording checks the flag count, not whether the flags are correct; incorrect flags can uncover a mine.
 
 The timer begins on the first reveal and stops on a win or loss. Pausing hides the board and stops the timer. Losing window focus automatically pauses an active game; returning resumes an automatic pause. A manual pause stays paused.
 
 Replacing an active game asks for confirmation in a modal inside the window. The timer pauses while the modal is open. Choose **Keep playing** or press **Escape** to return, or **New game** to confirm. The modal follows live theme changes and stays inside the window when it resizes. Game progress is held in memory for the current session; colors persist across launches.
+
+**Stats**, next to **New game**, opens an in-window record for each difficulty: wins, losses, quits, fastest win, best win streak, and safe cells cleared. Stats pause the timer while open. A quit counts when you replace or close an unfinished game after at least **3:00 on its timer** and at least one move. Short attempts, untouched boards, and paused time do not count. Wins and losses are recorded immediately; streaks and cleared-cell totals include recorded games only.
+
+Records are saved atomically to `stats.json` beside `theme.json`, persist across launches, and combine results from multiple windows. The same config-directory overrides apply. Invalid records are preserved and reported inline rather than overwritten. Game progress itself is not saved; closing a window ends that attempt.
 
 ## Live CLI themes
 

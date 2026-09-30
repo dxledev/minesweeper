@@ -1,6 +1,7 @@
 #pragma once
 
 #include "board.h"
+#include "core/statistics.h"
 #include "theme_watcher.h"
 #include <QButtonGroup>
 #include <QElapsedTimer>
@@ -15,6 +16,8 @@ class QVBoxLayout;
 namespace minesweeper {
 
 class ModalBackdrop;
+class StatisticsCard;
+class HowToPlayCard;
 
 class Window : public QMainWindow {
     Q_OBJECT
@@ -27,10 +30,12 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     bool eventFilter(QObject *object, QEvent *event) override;
 
 private:
     Game game_;
+    Statistics statistics_;
     ThemeWatcher *themeWatcher_;
     Board *board_ = nullptr;
     QLabel *mines_ = nullptr;
@@ -39,6 +44,7 @@ private:
     QLabel *status_ = nullptr;
     QLabel *subtitle_ = nullptr;
     QLabel *themeError_ = nullptr;
+    QLabel *statisticsError_ = nullptr;
     QPushButton *pause_ = nullptr;
     QPushButton *flagMode_ = nullptr;
     QButtonGroup *difficulties_ = nullptr;
@@ -47,6 +53,10 @@ private:
     QPushButton *keepPlaying_ = nullptr;
     QPushButton *confirmNew_ = nullptr;
     QLabel *modalText_ = nullptr;
+    QFrame *newGameCard_ = nullptr;
+    StatisticsCard *statisticsCard_ = nullptr;
+    HowToPlayCard *howToPlayCard_ = nullptr;
+    QString statisticsMessage_;
     Difficulty pendingDifficulty_ = Difficulty::Easy;
     QTimer ticker_;
     QTimer snapshotRefresh_;
@@ -55,6 +65,8 @@ private:
     bool paused_ = false;
     bool modalPaused_ = false;
     bool automaticPause_ = false;
+    bool madeMove_ = false;
+    bool outcomeRecorded_ = false;
     void buildInterface();
     QHBoxLayout *buildHeader();
     QHBoxLayout *buildDifficultySelector();
@@ -67,6 +79,10 @@ private:
     void refresh();
     void moved();
     void requestGame(Difficulty difficulty);
+    void showStatistics();
+    void showHowToPlay();
+    void showModal(QWidget *card, QPushButton *focus);
+    void recordOutcome();
     void startGame(Difficulty difficulty);
     void dismissModal();
     void captureModalBackground();
