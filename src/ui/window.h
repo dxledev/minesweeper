@@ -38,6 +38,7 @@ private:
     Statistics statistics_;
     ThemeWatcher *themeWatcher_;
     Board *board_ = nullptr;
+    QLabel *brand_ = nullptr;
     QLabel *mines_ = nullptr;
     QLabel *time_ = nullptr;
     QLabel *progress_ = nullptr;

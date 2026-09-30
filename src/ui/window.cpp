@@ -1,4 +1,5 @@
 #include "window.h"
+#include "brand_mark.h"
 #include "how_to_play_card.h"
 #include "modal_backdrop.h"
 #include "statistics_card.h"
@@ -98,12 +99,24 @@ void Window::buildInterface() {
 
 QHBoxLayout *Window::buildHeader() {
     auto *header = new QHBoxLayout;
+    auto *branding = new QHBoxLayout;
+    branding->setSpacing(14);
+    brand_ = new QLabel;
+    brand_->setObjectName("brand");
+    brand_->setFixedSize(40, 40);
+    branding->addWidget(brand_, 0, Qt::AlignBottom);
     auto *titles = new QVBoxLayout;
-    titles->setSpacing(3);
-    titles->addWidget(label("Minesweeper", "title"));
+    titles->setSpacing(0);
+    auto *title = label("Minesweeper", "title");
+    title->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    title->setAlignment(Qt::AlignLeft | Qt::AlignBottom);
+    titles->addWidget(title);
     subtitle_ = label("Find a little clarity in the minefield.", "subtitle");
+    subtitle_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    subtitle_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     titles->addWidget(subtitle_);
-    header->addLayout(titles);
+    branding->addLayout(titles);
+    header->addLayout(branding);
     header->addStretch();
     auto *howToPlay = button("How to play", "howToPlay");
     connect(howToPlay, &QPushButton::clicked, this, &Window::showHowToPlay);
@@ -300,6 +313,12 @@ void Window::applyTheme() {
     });
     for (const auto &key : keys) style.replace("$" + key, theme.hex(key));
     setStyleSheet(style);
+    auto *title = findChild<QLabel *>("title");
+    title->setMinimumWidth(title->sizeHint().width());
+    const int brandSize = qRound((title->sizeHint().height() + subtitle_->sizeHint().height()) * .85);
+    brand_->setFixedSize(brandSize, brandSize);
+    brand_->setPixmap(brandMark(theme, devicePixelRatioF(), brandSize));
+    setMinimumWidth(std::max(580, centralWidget()->minimumSizeHint().width()));
     board_->setTheme(theme);
     modal_->setTint(theme.color("background"));
 }
