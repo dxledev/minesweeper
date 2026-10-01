@@ -2,9 +2,12 @@
 
 #include "core/game.h"
 #include "core/theme.h"
+#include <QPixmap>
 #include <QWidget>
 
 namespace minesweeper {
+
+class SolvedOverlay;
 
 class Board : public QWidget {
     Q_OBJECT
@@ -38,7 +41,10 @@ private:
     int hovered_ = -1;
     QPointF pointerPosition_;
     bool pointerInside_ = false;
+    SolvedOverlay *solvedOverlay_;
     qreal cellSize() const;
+    QRectF gridRect() const;
+    QPixmap gridSnapshot();
     int cellAt(const QPointF &position) const;
     bool canClick(int index) const;
     void updateCursor();

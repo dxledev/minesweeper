@@ -20,6 +20,7 @@ add_library(minesweeper_ui
     src/ui/brand_mark.cpp
     src/ui/how_to_play_card.cpp
     src/ui/modal_backdrop.cpp
+    src/ui/solved_overlay.cpp
     src/ui/statistics_card.cpp
     src/ui/theme_watcher.cpp
     src/ui/window.cpp

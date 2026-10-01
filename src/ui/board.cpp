@@ -1,4 +1,5 @@
 #include "board.h"
+#include "solved_overlay.h"
 
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -36,7 +37,8 @@ void drawMine(QPainter &painter, const QRectF &rect, const QColor &color) {
 
 }
 
-Board::Board(Game &game, QWidget *parent) : QWidget(parent), game_(game), theme_(presetTheme("forest")) {
+Board::Board(Game &game, QWidget *parent)
+    : QWidget(parent), game_(game), theme_(presetTheme("forest")), solvedOverlay_(new SolvedOverlay(this)) {
     setObjectName("board");
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -47,10 +49,14 @@ Board::Board(Game &game, QWidget *parent) : QWidget(parent), game_(game), theme_
 
 void Board::setTheme(const Theme &theme) {
     theme_ = theme;
+    if (!solvedOverlay_->isHidden())
+        solvedOverlay_->setSnapshot(gridSnapshot(), theme_);
     update();
 }
 
 void Board::resetSelection() {
+    solvedOverlay_->clear();
+    setAccessibleDescription("Arrow keys select a cell. Space reveals, F flags, Enter clears adjacent cells.");
     selected_ = 0;
     hovered_ = -1;
     updateCursor();
@@ -92,12 +98,36 @@ qreal Board::cellSize() const {
                                (height() - 16.) / game_.size().rows));
 }
 
+QRectF Board::gridRect() const {
+    const auto &dimensions = game_.size();
+    const qreal size = cellSize();
+    const qreal gridWidth = size * dimensions.columns;
+    const qreal gridHeight = size * dimensions.rows;
+    return {(width() - gridWidth) / 2, (height() - gridHeight) / 2, gridWidth, gridHeight};
+}
+
 QRectF Board::cellRect(int index) const {
     const qreal size = cellSize();
     const auto &dimensions = game_.size();
     const qreal left = (width() - size * dimensions.columns) / 2;
     const qreal top = (height() - size * dimensions.rows) / 2;
     return {left + index % dimensions.columns * size, top + index / dimensions.columns * size, size, size};
+}
+
+QPixmap Board::gridSnapshot() {
+    const QRectF area = gridRect();
+    const qreal scale = 384. / std::max(area.width(), area.height());
+    const QSize snapshotSize(std::max(1, qRound(area.width() * scale)),
+                             std::max(1, qRound(area.height() * scale)));
+    QPixmap snapshot(snapshotSize);
+    snapshot.fill(theme_.color("surface"));
+    QPainter painter(&snapshot);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setWindow(area.toAlignedRect());
+    painter.setViewport(snapshot.rect());
+    for (int index = 0; index < int(game_.cells().size()); ++index)
+        paintCell(painter, index);
+    return snapshot;
 }
 
 int Board::cellAt(const QPointF &position) const {
@@ -163,6 +193,11 @@ void Board::act(int index, bool flag, bool chord) {
     selected_ = index;
     const bool changed = chord ? game_.chord(index) : flag ? game_.toggleFlag(index) : game_.reveal(index);
     update();
+    if (changed && game_.state() == State::Won && solvedOverlay_->isHidden()) {
+        solvedOverlay_->setGeometry(gridRect().toAlignedRect());
+        solvedOverlay_->reveal(gridSnapshot(), theme_);
+        setAccessibleDescription("Minefield cleared");
+    }
     if (changed) emit moved();
     updateCursor();
 }
@@ -201,6 +236,8 @@ void Board::enterEvent(QEnterEvent *event) {
 
 void Board::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
+    if (!solvedOverlay_->isHidden())
+        solvedOverlay_->setGeometry(gridRect().toAlignedRect());
     updateCursor();
 }
 
