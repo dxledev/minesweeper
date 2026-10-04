@@ -8,7 +8,8 @@ namespace minesweeper {
 Dimensions dimensions(Difficulty difficulty) {
     switch (difficulty) {
     case Difficulty::Easy: return {9, 9, 10};
-    case Difficulty::Intermediate: return {16, 16, 40};
+    case Difficulty::Intermediate: return {12, 12, 22};
+    case Difficulty::Hard: return {16, 16, 40};
     case Difficulty::Expert: return {16, 30, 99};
     }
     throw std::invalid_argument("Invalid difficulty");
@@ -17,14 +18,16 @@ Dimensions dimensions(Difficulty difficulty) {
 Difficulty parseDifficulty(std::string_view name) {
     if (name == "easy") return Difficulty::Easy;
     if (name == "intermediate") return Difficulty::Intermediate;
+    if (name == "hard") return Difficulty::Hard;
     if (name == "expert") return Difficulty::Expert;
-    throw std::invalid_argument("Difficulty must be easy, intermediate, or expert");
+    throw std::invalid_argument("Difficulty must be easy, intermediate, hard, or expert");
 }
 
 std::string_view difficultyName(Difficulty difficulty) {
     switch (difficulty) {
     case Difficulty::Easy: return "easy";
     case Difficulty::Intermediate: return "intermediate";
+    case Difficulty::Hard: return "hard";
     case Difficulty::Expert: return "expert";
     }
     throw std::invalid_argument("Invalid difficulty");

@@ -16,7 +16,7 @@ public:
     QPushButton *closeButton() const { return close_; }
 
 private:
-    std::array<std::array<QLabel *, 6>, 3> values_{};
+    std::array<std::array<QLabel *, 6>, 4> values_{};
     QLabel *error_;
     QPushButton *close_;
 };

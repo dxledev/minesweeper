@@ -17,6 +17,7 @@ target_include_directories(minesweeper_core PUBLIC src)
 target_link_libraries(minesweeper_core PUBLIC Qt6::Core Qt6::Gui)
 add_library(minesweeper_ui
     src/ui/board.cpp
+    src/ui/board_palette.cpp
     src/ui/brand_mark.cpp
     src/ui/how_to_play_card.cpp
     src/ui/modal_backdrop.cpp
@@ -42,6 +43,10 @@ if(BUILD_TESTING)
     target_link_libraries(ui_tests PRIVATE minesweeper_ui Qt6::Test)
     add_test(NAME ui COMMAND ui_tests)
     set_tests_properties(ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    add_executable(board_palette_tests tests/board_palette_tests.cpp)
+    target_link_libraries(board_palette_tests PRIVATE minesweeper_ui Qt6::Test)
+    add_test(NAME board_palette COMMAND board_palette_tests)
+    set_tests_properties(board_palette PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     add_test(NAME cli COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_test.sh $<TARGET_FILE:minesweeper>)
     add_test(NAME install COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/install_test.sh
         $<TARGET_FILE_DIR:minesweeper> ${CMAKE_CURRENT_SOURCE_DIR}/scripts/install-desktop.sh)

@@ -39,6 +39,7 @@ void drawMine(QPainter &painter, const QRectF &rect, const QColor &color) {
 
 Board::Board(Game &game, QWidget *parent)
     : QWidget(parent), game_(game), theme_(presetTheme("forest")), solvedOverlay_(new SolvedOverlay(this)) {
+    boardPalette_ = boardPalette(theme_);
     setObjectName("board");
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -49,6 +50,7 @@ Board::Board(Game &game, QWidget *parent)
 
 void Board::setTheme(const Theme &theme) {
     theme_ = theme;
+    boardPalette_ = boardPalette(theme_);
     if (!solvedOverlay_->isHidden())
         solvedOverlay_->setSnapshot(gridSnapshot(), theme_);
     update();
@@ -145,11 +147,18 @@ void Board::paintCell(QPainter &painter, int index) {
     const bool mineVisible = cell.mine && (cell.revealed || lost);
     const bool wrongFlag = lost && cell.flagged && !cell.mine;
     QColor background = theme_.color(cell.revealed ? "related" : "surface_alt");
-    if (cell.flagged) background = theme_.color("matching");
-    if (index == hovered_ && !cell.revealed && !game_.finished()) background = theme_.color("selection");
+    QColor border = cell.revealed ? boardPalette_.revealedBorder : boardPalette_.coveredBorder;
+    if (cell.flagged) {
+        background = theme_.color("matching");
+        border = boardPalette_.flaggedBorder;
+    }
+    if (index == hovered_ && !cell.revealed && !game_.finished()) {
+        background = theme_.color("selection");
+        border = boardPalette_.hoveredBorder;
+    }
     if (index == game_.detonated()) background = theme_.dangerColor;
     painter.setBrush(background);
-    painter.setPen(cell.revealed ? QPen(theme_.color("grid"), .7) : Qt::NoPen);
+    painter.setPen(QPen(border, cell.revealed ? 1. : 1.5));
     painter.drawRoundedRect(rect, std::min(6., rect.width() * .14), std::min(6., rect.width() * .14));
     if (mineVisible && !cell.flagged) {
         drawMine(painter, rect, index == game_.detonated() ? theme_.color("background") : theme_.dangerColor);

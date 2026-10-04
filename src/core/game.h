@@ -7,7 +7,7 @@
 
 namespace minesweeper {
 
-enum class Difficulty { Easy, Intermediate, Expert };
+enum class Difficulty { Easy, Intermediate, Hard, Expert };
 enum class State { Ready, Playing, Won, Lost };
 struct Dimensions { int rows; int columns; int mines; };
 struct Cell {

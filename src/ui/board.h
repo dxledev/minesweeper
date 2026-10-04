@@ -2,6 +2,7 @@
 
 #include "core/game.h"
 #include "core/theme.h"
+#include "board_palette.h"
 #include <QPixmap>
 #include <QWidget>
 
@@ -35,6 +36,7 @@ protected:
 private:
     Game &game_;
     Theme theme_;
+    BoardPalette boardPalette_;
     bool paused_ = false;
     bool flagMode_ = false;
     int selected_ = 0;

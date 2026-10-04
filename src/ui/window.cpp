@@ -134,21 +134,16 @@ QHBoxLayout *Window::buildDifficultySelector() {
     auto *row = new QHBoxLayout;
     row->setSpacing(8);
     difficulties_ = new QButtonGroup(this);
-    const QStringList names{"Easy", "Intermediate", "Expert"};
+    const QStringList names{"Easy", "Intermediate", "Hard", "Expert"};
     for (int index = 0; index < names.size(); ++index) {
         auto *choice = button(names[index], "difficulty");
         choice->setCheckable(true);
         choice->setChecked(index == int(game_.difficulty()));
         difficulties_->addButton(choice, index);
-        row->addWidget(choice);
+        row->addWidget(choice, 1);
     }
     connect(difficulties_, &QButtonGroup::idClicked, this, [this](int id) { requestGame(Difficulty(id)); });
-    auto *centered = new QHBoxLayout;
-    centered->setSpacing(0);
-    centered->addStretch(2);
-    centered->addLayout(row, 6);
-    centered->addStretch(2);
-    return centered;
+    return row;
 }
 
 QHBoxLayout *Window::buildMetrics() {

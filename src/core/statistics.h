@@ -27,7 +27,7 @@ public:
 
 private:
     QString path_;
-    std::array<DifficultyStats, 3> totals_{};
+    std::array<DifficultyStats, 4> totals_{};
 };
 
 }

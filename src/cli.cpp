@@ -55,7 +55,7 @@ void printHelp() {
     QTextStream(stdout) << R"(Minesweeper — a portable C++ desktop game
 
 Usage:
-  minesweeper [--difficulty easy|intermediate|expert] [--config-dir DIRECTORY]
+  minesweeper [--difficulty easy|intermediate|hard|expert] [--config-dir DIRECTORY]
   minesweeper theme list
   minesweeper theme path
   minesweeper theme show

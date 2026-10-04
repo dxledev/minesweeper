@@ -14,12 +14,47 @@ using namespace minesweeper;
 class CoreTests : public QObject {
     Q_OBJECT
 private slots:
+    void difficultyLevels() {
+        const std::array<Dimensions, 4> expected{{{9, 9, 10}, {12, 12, 22}, {16, 16, 40}, {16, 30, 99}}};
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
+            const auto size = dimensions(difficulty);
+            const auto target = expected.at(size_t(difficulty));
+            QCOMPARE(size.rows, target.rows);
+            QCOMPARE(size.columns, target.columns);
+            QCOMPARE(size.mines, target.mines);
+            QCOMPARE(parseDifficulty(difficultyName(difficulty)), difficulty);
+        }
+    }
+
+    void statisticsMigrateIntermediateToHard() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("stats.json");
+        const QJsonObject oldLevels{{"easy", QJsonObject{{"wins", 2}}},
+            {"intermediate", QJsonObject{{"wins", 7}, {"fastest_win_ms", 45000}}},
+            {"expert", QJsonObject{{"losses", 3}}}};
+        writeJson(path, {{"version", 1}, {"difficulties", oldLevels}});
+        Statistics statistics(path);
+        statistics.reload();
+        QCOMPARE(statistics.forDifficulty(Difficulty::Intermediate).wins, 0);
+        QCOMPARE(statistics.forDifficulty(Difficulty::Hard).wins, 7);
+        QCOMPARE(statistics.forDifficulty(Difficulty::Hard).fastestWinMilliseconds, 45000);
+        QCOMPARE(readJson(path).value("version").toInteger(), 1);
+        QVERIFY(statistics.record(Difficulty::Intermediate, State::Won, 30000, true, 122));
+        QCOMPARE(readJson(path).value("version").toInteger(), 2);
+        Statistics restored(path);
+        restored.reload();
+        QCOMPARE(restored.forDifficulty(Difficulty::Easy).wins, 2);
+        QCOMPARE(restored.forDifficulty(Difficulty::Intermediate).wins, 1);
+        QCOMPARE(restored.forDifficulty(Difficulty::Hard).wins, 7);
+        QCOMPARE(restored.forDifficulty(Difficulty::Expert).losses, 3);
+    }
+
     void statisticsOutcomesAndPersistence() {
         QTemporaryDir directory;
         const auto path = directory.filePath("stats.json");
         Statistics first(path), second(path);
         first.reload();
-        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
             QVERIFY(!first.record(difficulty, State::Ready, 180000, true, 0));
             QVERIFY(!first.record(difficulty, State::Playing, 180000, false, 0));
             QVERIFY(!first.record(difficulty, State::Playing, 179999, true, 20));
@@ -67,7 +102,7 @@ private slots:
     }
 
     void generation() {
-        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
             const auto size = dimensions(difficulty);
             for (std::uint32_t seed = 0; seed < 100; ++seed) {
                 Game game(difficulty, seed);
@@ -112,7 +147,7 @@ private slots:
     }
 
     void winAllDifficulties() {
-        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
             Game game(difficulty, 13);
             game.reveal(0);
             for (int index = 0; index < int(game.cells().size()); ++index) {
@@ -126,7 +161,7 @@ private slots:
     }
 
     void chording() {
-        Game game(Difficulty::Intermediate, 5);
+        Game game(Difficulty::Hard, 5);
         game.reveal(0);
         int target = -1;
         for (int index = 0; index < int(game.cells().size()); ++index) {
@@ -152,7 +187,7 @@ private slots:
     void wrongFlagsCanLose() {
         bool tested = false;
         for (std::uint32_t seed = 0; seed < 100 && !tested; ++seed) {
-            Game game(Difficulty::Intermediate, seed);
+            Game game(Difficulty::Hard, seed);
             game.reveal(0);
             for (int index = 0; index < int(game.cells().size()) && !tested; ++index) {
                 const auto &cell = game.cell(index);

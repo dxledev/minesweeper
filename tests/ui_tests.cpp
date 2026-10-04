@@ -69,7 +69,7 @@ private slots:
         QVERIFY(first.width() >= 20);
         window.hide();
         QTest::qWait(40);
-        for (auto difficulty : {Difficulty::Intermediate, Difficulty::Expert}) {
+        for (auto difficulty : {Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
             Window other(directory.path(), theme, difficulty);
             other.resize(580, 680);
             show(other);
@@ -87,7 +87,7 @@ private slots:
         show(window);
         const auto choices = window.findChildren<QPushButton *>("difficulty");
         const auto metrics = window.findChildren<QFrame *>("metric");
-        QCOMPARE(choices.size(), 3);
+        QCOMPARE(choices.size(), 4);
         QCOMPARE(metrics.size(), 3);
         for (int width : {580, 720, 1140, 1920}) {
             window.resize(width, 800);
@@ -96,14 +96,14 @@ private slots:
             const int choicesRight = choices.last()->mapTo(window.centralWidget(), QPoint()).x() + choices.last()->width();
             const int metricsLeft = metrics.first()->mapTo(window.centralWidget(), QPoint()).x();
             const int metricsRight = metrics.last()->mapTo(window.centralWidget(), QPoint()).x() + metrics.last()->width();
-            QVERIFY(std::abs((choicesRight - choicesLeft) * 5 - (metricsRight - metricsLeft) * 3) <= 5);
+            QVERIFY(std::abs((choicesRight - choicesLeft) - (metricsRight - metricsLeft)) <= 2);
             QVERIFY(std::abs(choicesLeft + choicesRight - metricsLeft - metricsRight) <= 2);
             QVERIFY(std::abs(choices.first()->width() - choices.last()->width()) <= 1);
         }
     }
 
     void eligibleCellCursors() {
-        Game game(Difficulty::Intermediate, 5);
+        Game game(Difficulty::Hard, 5);
         Board board(game);
         board.resize(640, 640);
         board.show();
@@ -294,7 +294,7 @@ private slots:
         QTemporaryDir directory;
         const auto path = directory.filePath("stats.json");
         const auto theme = ensureTheme(directory.filePath("theme.json"));
-        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
             Window window(directory.path(), theme, difficulty);
             show(window);
             auto *board = window.board();

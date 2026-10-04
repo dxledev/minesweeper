@@ -32,9 +32,9 @@ StatisticsCard::StatisticsCard(QWidget *parent) : QFrame(parent) {
     auto *grid = new QGridLayout;
     grid->setHorizontalSpacing(16);
     grid->setVerticalSpacing(18);
-    const QStringList headings{"Easy", "Intermediate", "Expert"};
+    const QStringList headings{"Easy", "Intermediate", "Hard", "Expert"};
     const QStringList metrics{"Wins", "Losses", "Quits", "Fastest win", "Best win streak", "Safe cells cleared"};
-    for (int column = 0; column < 3; ++column) {
+    for (int column = 0; column < headings.size(); ++column) {
         auto *heading = textLabel(headings[column], "statsHeading");
         heading->setAlignment(Qt::AlignCenter);
         grid->addWidget(heading, 0, column + 1);
@@ -69,7 +69,7 @@ QSize StatisticsCard::sizeHint() const {
 }
 
 void StatisticsCard::refresh(const Statistics &statistics, const QString &error) {
-    for (int index = 0; index < 3; ++index) {
+    for (int index = 0; index < int(values_.size()); ++index) {
         const auto &stats = statistics.forDifficulty(Difficulty(index));
         const QStringList values{QString::number(stats.wins), QString::number(stats.losses),
             QString::number(stats.quits), formatTime(stats.fastestWinMilliseconds),

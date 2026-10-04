@@ -17,7 +17,8 @@ Choose a difficulty in the window or start with `./build/minesweeper --difficult
 | Difficulty | Board | Mines |
 | --- | --- | --- |
 | Easy | 9 × 9 | 10 |
-| Intermediate | 16 × 16 | 40 |
+| Intermediate | 12 × 12 | 22 |
+| Hard | 16 × 16 | 40 |
 | Expert | 30 × 16 | 99 |
 
 Mines are placed on the first reveal, with that cell and its neighbors protected. Empty areas open automatically. Clear every safe cell to win; flags help keep track of suspected mines. Boards are random and can require guessing.

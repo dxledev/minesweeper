@@ -57,14 +57,17 @@ const DifficultyStats &Statistics::forDifficulty(Difficulty difficulty) const {
 }
 
 void Statistics::reload() {
-    std::array<DifficultyStats, 3> next{};
+    std::array<DifficultyStats, 4> next{};
     if (QFileInfo::exists(path_)) {
         const auto data = readJson(path_);
-        if (data.value("version").toInteger() != 1 || !data.value("difficulties").isObject())
+        const auto version = data.value("version").toInteger();
+        if ((version != 1 && version != 2) || !data.value("difficulties").isObject())
             throw std::invalid_argument("Invalid statistics file");
         const auto difficulties = data.value("difficulties").toObject();
-        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert}) {
-            const auto key = QString::fromUtf8(difficultyName(difficulty));
+        for (auto difficulty : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert}) {
+            if (version == 1 && difficulty == Difficulty::Intermediate) continue;
+            const auto key = version == 1 && difficulty == Difficulty::Hard
+                ? QString("intermediate") : QString::fromUtf8(difficultyName(difficulty));
             if (!difficulties.value(key).isObject())
                 throw std::invalid_argument("Invalid difficulty statistics");
             next.at(size_t(difficulty)) = parseStats(difficulties.value(key).toObject());
@@ -87,9 +90,9 @@ bool Statistics::record(Difficulty difficulty, State state, qint64 elapsedMillis
     auto next = totals_;
     updateStats(next.at(size_t(difficulty)), state, elapsedMilliseconds, clearedCells);
     QJsonObject difficulties;
-    for (auto level : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Expert})
+    for (auto level : {Difficulty::Easy, Difficulty::Intermediate, Difficulty::Hard, Difficulty::Expert})
         difficulties.insert(QString::fromUtf8(difficultyName(level)), serialize(next.at(size_t(level))));
-    writeJson(path_, {{"version", 1}, {"difficulties", difficulties}});
+    writeJson(path_, {{"version", 2}, {"difficulties", difficulties}});
     totals_ = next;
     return true;
 }
