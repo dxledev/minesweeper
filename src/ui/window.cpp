@@ -72,7 +72,7 @@ Window::Window(QString configDirectory, Theme theme, Difficulty difficulty)
     connect(&ticker_, &QTimer::timeout, this, &Window::refresh);
     snapshotRefresh_.setSingleShot(true);
     snapshotRefresh_.setInterval(0);
-    connect(&snapshotRefresh_, &QTimer::timeout, this, &Window::captureModalBackground);
+    connect(&snapshotRefresh_, &QTimer::timeout, this, [this] { captureModalBackground(); });
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this] {
         stopClock();
         recordOutcome();
@@ -223,11 +223,11 @@ void Window::buildModal() {
     confirmNew_->installEventFilter(this);
     connect(keepPlaying_, &QPushButton::clicked, this, &Window::dismissModal);
     connect(confirmNew_, &QPushButton::clicked, this, [this] {
-        const auto difficulty = pendingDifficulty_;
-        modal_->hide();
-        modal_->clearSnapshot();
-        startGame(difficulty);
+        if (modal_->closing()) return;
+        startAfterDismiss_ = true;
+        dismissModal();
     });
+    connect(modal_, &ModalBackdrop::dismissed, this, &Window::finishDismiss);
     actions->addWidget(keepPlaying_);
     actions->addWidget(confirmNew_);
     content->addLayout(actions);
@@ -406,13 +406,15 @@ void Window::showModal(QWidget *card, QPushButton *focus) {
     statisticsCard_->setVisible(card == statisticsCard_);
     howToPlayCard_->setVisible(card == howToPlayCard_);
     modal_->setGeometry(centralWidget()->rect());
-    modal_->show();
     if (card == newGameCard_) {
         modalText_->setMinimumHeight(modalText_->heightForWidth(modalText_->width()));
-        modal_->layout()->activate();
     }
-    captureModalBackground();
+    modal_->layout()->activate();
+    // Capture before showing so the first painted frame is already the opaque snapshot.
+    captureModalBackground(true);
+    modal_->show();
     modal_->raise();
+    modal_->present(card);
     focus->setFocus();
 }
 
@@ -431,14 +433,24 @@ void Window::recordOutcome() {
 }
 
 void Window::dismissModal() {
+    if (!modal_->isVisible() || modal_->closing()) return;
+    modal_->dismiss();
+}
+
+void Window::finishDismiss() {
     modal_->hide();
     modal_->clearSnapshot();
+    if (startAfterDismiss_) {
+        startAfterDismiss_ = false;
+        startGame(pendingDifficulty_);
+        return;
+    }
     setPaused(modalPaused_);
     board_->setFocus();
 }
 
-void Window::captureModalBackground() {
-    if (!modal_->isVisible()) return;
+void Window::captureModalBackground(bool force) {
+    if (!force && !modal_->isVisible()) return;
     const bool overlayPaused = paused_;
     paused_ = modalPaused_;
     board_->setPaused(paused_);

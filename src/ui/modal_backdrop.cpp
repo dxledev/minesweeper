@@ -1,5 +1,7 @@
 #include "modal_backdrop.h"
 
+#include "modal_motion.h"
+
 #include <QGraphicsBlurEffect>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
@@ -29,6 +31,7 @@ ModalBackdrop::ModalBackdrop(QWidget *parent) : QWidget(parent) {
 }
 
 void ModalBackdrop::capture(const QPixmap &snapshot) {
+    frame_ = snapshot;
     // Blur a reduced snapshot once; the idle modal retains only this small image.
     const auto logicalSize = snapshot.deviceIndependentSize().toSize();
     auto reducedSize = (logicalSize / 3).expandedTo(QSize(1, 1));
@@ -56,7 +59,42 @@ void ModalBackdrop::capture(const QPixmap &snapshot) {
 }
 
 void ModalBackdrop::clearSnapshot() {
+    frame_ = QPixmap();
     snapshot_ = QPixmap();
+}
+
+void ModalBackdrop::present(QWidget *card) {
+    card_ = card;
+    closing_ = false;
+    card->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    auto *motion = qobject_cast<ModalMotion *>(card->graphicsEffect());
+    if (!motion) {
+        motion = new ModalMotion(card);
+        card->setGraphicsEffect(motion);
+    }
+    if (motion_ != motion) {
+        if (motion_) disconnect(motion_, nullptr, this, nullptr);
+        motion_ = motion;
+        connect(motion, &ModalMotion::progressChanged, this, [this](qreal progress) {
+            progress_ = progress;
+            update();
+        });
+        connect(motion, &ModalMotion::finished, this, [this](bool open) {
+            if (open || !closing_) return;
+            closing_ = false;
+            emit dismissed();
+        });
+    }
+    motion->reset();
+    motion->animate(true);
+}
+
+void ModalBackdrop::dismiss() {
+    if (closing_ || !isVisible()) return;
+    if (!motion_) { emit dismissed(); return; }
+    closing_ = true;
+    if (card_) card_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    motion_->animate(false);
 }
 
 void ModalBackdrop::setTint(const QColor &color) {
@@ -68,6 +106,9 @@ void ModalBackdrop::setTint(const QColor &color) {
 void ModalBackdrop::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    // The unblurred frame stays opaque underneath so the widget never shows through mid-fade.
+    painter.drawPixmap(rect(), frame_);
+    painter.setOpacity(progress_);
     painter.drawPixmap(rect(), snapshot_);
     painter.fillRect(rect(), tint_);
 }

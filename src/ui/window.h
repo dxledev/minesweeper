@@ -65,6 +65,7 @@ private:
     qint64 accumulatedMilliseconds_ = 0;
     bool paused_ = false;
     bool modalPaused_ = false;
+    bool startAfterDismiss_ = false;
     bool automaticPause_ = false;
     bool madeMove_ = false;
     bool outcomeRecorded_ = false;
@@ -86,7 +87,8 @@ private:
     void recordOutcome();
     void startGame(Difficulty difficulty);
     void dismissModal();
-    void captureModalBackground();
+    void finishDismiss();
+    void captureModalBackground(bool force = false);
     void setPaused(bool paused);
     void stopClock();
 };

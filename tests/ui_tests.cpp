@@ -2,6 +2,7 @@
 #include "core/theme_source.h"
 #include "ui/window.h"
 #include "ui/modal_backdrop.h"
+#include "ui/modal_motion.h"
 
 #include <QApplication>
 #include <QFile>
@@ -44,6 +45,7 @@ private:
 
 private slots:
     void initTestCase() {
+        qputenv("MINESWEEPER_REDUCED_MOTION", "1");
         QApplication::setStyle("Fusion");
     }
 
@@ -152,6 +154,28 @@ private slots:
                             Qt::NoButton, Qt::NoButton, Qt::NoModifier);
         QApplication::sendEvent(&board, &outside);
         QCOMPARE(board.cursor().shape(), Qt::ArrowCursor);
+    }
+
+    void modalAnimatesWithoutGap() {
+        qunsetenv("MINESWEEPER_REDUCED_MOTION");
+        QTemporaryDir directory;
+        Window window(directory.path(), ensureTheme(directory.filePath("theme.json")));
+        show(window);
+        auto *modal = window.findChild<QWidget *>("modalBackdrop");
+        QTest::mouseClick(window.findChild<QPushButton *>("howToPlay"), Qt::LeftButton);
+        QVERIFY(modal->isVisible());
+        auto *card = modal->findChild<QFrame *>("howToPlayCard");
+        auto *motion = qobject_cast<ModalMotion *>(card->graphicsEffect());
+        QVERIFY(motion);
+        QVERIFY(motion->progress() < 1);
+        // The backdrop is opaque from the first frame: no transparent pixels while fading.
+        QCOMPARE(modal->grab().toImage().pixelColor(2, 2).alpha(), 255);
+        QTRY_COMPARE(motion->progress(), 1.0);
+        QTest::keyClick(window.focusWidget(), Qt::Key_Escape);
+        QVERIFY(modal->isVisible());
+        QCOMPARE(modal->grab().toImage().pixelColor(2, 2).alpha(), 255);
+        QTRY_VERIFY(!modal->isVisible());
+        qputenv("MINESWEEPER_REDUCED_MOTION", "1");
     }
 
     void howToPlayModal() {
